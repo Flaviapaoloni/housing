@@ -238,7 +238,7 @@ function drawChart(data) {
 
   // Update meta
   document.getElementById('chart-meta').textContent =
-    `Index Jan 2000 = 100 · ${years[0]} – ${years[years.length - 1]} · Source: CBS, CPB`;
+    `Index Jan 2000 = 100 · ${years[0]} – ${years[years.length - 1]} · Source: CBS`;
   document.getElementById('row-count').textContent   = `${data.length} observations`;
   document.getElementById('last-updated').textContent = 'Loaded ' + new Date().toLocaleTimeString();
 
