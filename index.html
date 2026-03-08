@@ -64,7 +64,9 @@
     padding: 32px;
   }
 
-  .chart-header { margin-bottom: 28px; }
+  .chart-header {
+    margin-bottom: 28px;
+  }
 
   .chart-title {
     font-family: 'Playfair Display', serif;
@@ -81,6 +83,7 @@
     letter-spacing: 0.08em;
   }
 
+  /* legend */
   .legend {
     display: flex;
     gap: 24px;
@@ -102,6 +105,16 @@
     border-radius: 2px;
   }
 
+  .legend-line.dashed {
+    background: repeating-linear-gradient(
+      to right,
+      var(--blue) 0, var(--blue) 6px,
+      transparent 6px, transparent 10px
+    );
+    height: 2px;
+  }
+
+  /* canvas wrapper */
   .canvas-wrap {
     position: relative;
     width: 100%;
@@ -112,6 +125,7 @@
     width: 100%;
   }
 
+  /* tooltip */
   .tooltip {
     position: absolute;
     background: var(--navy);
@@ -140,6 +154,7 @@
     justify-content: space-between;
   }
 
+  /* error */
   .error-msg {
     font-family: 'DM Mono', monospace;
     font-size: 12px;
@@ -152,25 +167,29 @@
 <body>
 
 <div class="section-label">Market Data</div>
-<div class="section-title">House Price Index</div>
+<div class="section-title">House Price Index vs Construction Costs</div>
 
 <div class="chart-container">
   <div class="chart-header">
-    <div class="chart-title">Average Purchase Price (euros) vs Construction Costs</div>
+    <div class="chart-title">Average Purchase Price (euros)</div>
     <div class="chart-meta" id="chart-meta">Loading…</div>
   </div>
-
+  
+  <div class="chart-header">
+    <div class="chart-title">Construction costs (mln euros)</div>
+    <div class="chart-meta" id="chart-meta">Loading…</div>
+  </div>
+  
   <div class="legend">
     <div class="legend-item">
       <div class="legend-line" style="background:var(--accent);"></div>
-      Average Purchase Price (euros)
+      House Price Index
     </div>
-  </div>
-      <div class="legend-item">
-      <div class="legend-line" style="background:var(--accent);"></div>
-      Construction costs (mln euros)
+  <div class="legend-item">
+      <div class="legend-line dashed"></div>
+      Construction Cost Index
     </div>
-  </div>
+  </div>  
 
   <div class="canvas-wrap">
     <canvas id="chart" height="320"></canvas>
@@ -184,13 +203,19 @@
 </div>
 
 <script>
+// ─────────────────────────────────────────────
+//  PASTE YOUR RAW GITHUB CSV URL HERE
+// ─────────────────────────────────────────────
 const CSV_URL = "https://raw.githubusercontent.com/Flaviapaoloni/housing/refs/heads/main/house_price_cbs.csv";
+// Example:
+// const CSV_URL = "https://raw.githubusercontent.com/username/repo/main/hpi.csv";
+//
+// Expected CSV columns: year, house_price_index, construction_costs
+// ─────────────────────────────────────────────
 
-// FIX 1: delimiter set to ";" — your CSV uses semicolons, not commas
 Papa.parse(CSV_URL, {
   download: true,
   header: true,
-  delimiter: ";",
   skipEmptyLines: true,
   complete: ({ data }) => {
     if (!data || data.length === 0) {
@@ -212,13 +237,13 @@ function drawChart(data) {
   const hpi   = data.map(r => parseFloat(r.house_price_index));
   const cci   = data.map(r => parseFloat(r.construction_costs));
 
-  // FIX 2: 
-  const allVals = hpi.filter(v => !isNaN(v));
+  const allVals = [...hpi, ...cci].filter(v => !isNaN(v));
   const minVal  = Math.min(...allVals);
   const maxVal  = Math.max(...allVals);
 
+  // Update meta
   document.getElementById('chart-meta').textContent =
-    `Average purchase price in euros · ${years[0]} – ${years[years.length - 1]} · Source: CBS`;
+    `Index Jan 2000 = 100 · ${years[0]} – ${years[years.length - 1]} · Source: CBS`;
   document.getElementById('row-count').textContent   = `${data.length} observations`;
   document.getElementById('last-updated').textContent = 'Loaded ' + new Date().toLocaleTimeString();
 
@@ -231,21 +256,23 @@ function drawChart(data) {
   const ctx     = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  const pad    = { top: 20, right: 24, bottom: 40, left: 72 };
+  // Padding
+  const pad = { top: 20, right: 24, bottom: 40, left: 52 };
   const chartW = W - pad.left - pad.right;
   const chartH = H - pad.top - pad.bottom;
 
+  // Scale helpers
   const yPad   = (maxVal - minVal) * 0.08;
   const yMin   = minVal - yPad;
   const yMax   = maxVal + yPad;
-  const xScale = i => pad.left + (i / (years.length - 1)) * chartW;
-  const yScale = v => pad.top  + chartH - ((v - yMin) / (yMax - yMin)) * chartH;
+  const xScale = i  => pad.left + (i / (years.length - 1)) * chartW;
+  const yScale = v  => pad.top  + chartH - ((v - yMin) / (yMax - yMin)) * chartH;
 
-  // Grid & y-axis labels formatted as €000.000 (Dutch locale)
+  // ── Grid lines & y-axis labels ──
   const ticks = 5;
   ctx.strokeStyle = '#e8e3d8';
   ctx.lineWidth   = 1;
-  ctx.font        = '10px DM Mono, monospace';
+  ctx.font        = `${10 * dpr / dpr}px DM Mono, monospace`;
   ctx.fillStyle   = '#9a9080';
   ctx.textAlign   = 'right';
 
@@ -256,20 +283,20 @@ function drawChart(data) {
     ctx.moveTo(pad.left, y);
     ctx.lineTo(pad.left + chartW, y);
     ctx.stroke();
-    ctx.fillText('€' + Math.round(v).toLocaleString('nl-NL'), pad.left - 8, y + 4);
+    ctx.fillText(Math.round(v), pad.left - 8, y + 4);
   }
 
-  // x-axis labels
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#9a9080';
-  const step = Math.max(1, Math.floor(years.length / 8));
+  // ── x-axis labels (show ~8 evenly spaced) ──
+  ctx.textAlign  = 'center';
+  ctx.fillStyle  = '#9a9080';
+  const step     = Math.max(1, Math.floor(years.length / 8));
   years.forEach((yr, i) => {
     if (i % step === 0 || i === years.length - 1) {
       ctx.fillText(yr, xScale(i), H - pad.bottom + 16);
     }
   });
 
-  // Fill under line
+  // ── Fill under HPI ──
   const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
   gradient.addColorStop(0, 'rgba(200,57,43,0.12)');
   gradient.addColorStop(1, 'rgba(200,57,43,0)');
@@ -285,7 +312,19 @@ function drawChart(data) {
   ctx.fillStyle = gradient;
   ctx.fill();
 
-  // Draw line
+  // ── Draw CCI (dashed blue) ──
+  ctx.beginPath();
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = '#1a3a6b';
+  ctx.lineWidth   = 2;
+  cci.forEach((v, i) => {
+    if (isNaN(v)) return;
+    i === 0 ? ctx.moveTo(xScale(i), yScale(v)) : ctx.lineTo(xScale(i), yScale(v));
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── Draw HPI (solid red) ──
   ctx.beginPath();
   ctx.strokeStyle = '#c8392b';
   ctx.lineWidth   = 2.5;
@@ -295,34 +334,43 @@ function drawChart(data) {
   });
   ctx.stroke();
 
-  // Tooltip — FIX 3: shows only year and price (no CCI / Gap)
+  // ── Tooltip on hover ──
   const tooltip  = document.getElementById('tooltip');
+  const canvasEl = canvas;
 
-  canvas.addEventListener('mousemove', e => {
-    const rect  = canvas.getBoundingClientRect();
-    const scale = rect.width / W;
-    const inner = (e.clientX - rect.left) - pad.left * scale;
+  canvasEl.addEventListener('mousemove', e => {
+    const rect  = canvasEl.getBoundingClientRect();
+    const mx    = (e.clientX - rect.left);
+    const inner = mx - pad.left;
 
-    if (inner < 0 || inner > chartW * scale) {
+    if (inner < 0 || inner > chartW) {
       tooltip.classList.remove('visible');
       return;
     }
 
-    const idx     = Math.round((inner / (chartW * scale)) * (years.length - 1));
+    const idx    = Math.round((inner / chartW) * (years.length - 1));
     const clamped = Math.max(0, Math.min(idx, years.length - 1));
-    const hv      = hpi[clamped];
+    const hv     = hpi[clamped];
+    const cv     = cci[clamped];
 
     tooltip.innerHTML =
       `<strong>${years[clamped]}</strong><br>` +
-      `€${isNaN(hv) ? '—' : Math.round(hv).toLocaleString('nl-NL')}`;
+      `HPI: ${isNaN(hv) ? '—' : hv.toFixed(1)}<br>` +
+      `CCI: ${isNaN(cv) ? '—' : cv.toFixed(1)}<br>` +
+      `Gap: ${(!isNaN(hv) && !isNaN(cv)) ? (hv - cv).toFixed(1) : '—'}`;
 
-    tooltip.style.left = (xScale(clamped) * scale + 12) + 'px';
-    tooltip.style.top  = '0px';
+    const tx = xScale(clamped) * (rect.width / W);
+    const ty = 0;
+    tooltip.style.left = (tx + 12) + 'px';
+    tooltip.style.top  = ty + 'px';
     tooltip.classList.add('visible');
   });
 
-  canvas.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+  canvasEl.addEventListener('mouseleave', () => {
+    tooltip.classList.remove('visible');
+  });
 
+  // Redraw on resize
   window.addEventListener('resize', () => drawChart(data));
 }
 </script>
